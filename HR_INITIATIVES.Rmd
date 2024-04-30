@@ -1,0 +1,571 @@
+```{r}
+##########LIBRARIES
+#installing packages
+install.packages("caret")
+install.packages("factoextra")
+install.packages("rpart")
+install.packages("rpart.plot")
+install.packages("randomForest")
+install.packages("glmnet")
+install.packages("pROC")
+install.packages("cluster")
+install.packages("dbscan")
+# Load necessary library
+library(readr) # For reading CSV files
+library(dplyr)# For data manipulation
+library(ggplot2)
+library(lattice)
+library(caret) 
+library(factoextra)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(glmnet)
+library(pROC)
+library(cluster)
+library(dbscan)
+#importing dataset
+
+employee <- read_csv("C:/sunday/attrition/archive (5)/HR_Analytics.csv.csv")
+spec(employee)
+View(employee)
+#successfully loaded the dataset
+
+# 
+#  i. Data Cleaning, preprocessing, Preparation (includes Missing data Handling, descriptive Statistics,
+# clustering outlier detection, feature extraction) : 10 Marks
+#######################################Missing data handling and imputation with mean
+
+# Identify numerical columns
+numerical_columns <- select(employee, where(is.numeric))
+
+# Check for missing values in numerical columns
+missing_values <- sapply(numerical_columns, function(x) sum(is.na(x)))
+
+# Identify columns with missing values
+columns_with_missing <- names(missing_values[missing_values > 0])
+
+# Impute missing values with mean
+for (column in columns_with_missing) {
+  mean_value <- mean(employee[[column]], na.rm = TRUE)
+  employee[[column]][is.na(employee[[column]])] <- mean_value
+}
+
+# Verify that missing values have been imputed
+summary(select(employee, all_of(columns_with_missing)))
+View(employee)
+##
+employee$Attrition <- as.integer(factor(employee$Attrition))
+employee$Attrition
+employee$Attrition <- ifelse(employee$Attrition > 1, 1,0)
+employee$Attrition
+#######################################DESCRIPTIVE STATISTICS
+summary(employee)
+# List column names
+colnames(employee)
+
+####################################### Data preprocessing
+# Convert to appropriate data types
+employee <- employee %>%
+  mutate(
+    # Convert categorical variables to factors
+    Attrition = as.factor(Attrition),
+    BusinessTravel = as.factor(BusinessTravel),
+    Department = as.factor(Department),
+    Education = as.factor(Education),
+    EducationField = as.factor(EducationField),
+    Gender = as.factor(Gender),
+    JobRole = as.factor(JobRole),
+    MaritalStatus = as.factor(MaritalStatus),
+    Over18 = as.factor(Over18),
+    OverTime = as.factor(OverTime),
+    PerformanceRating = as.factor(PerformanceRating),
+    EnvironmentSatisfaction = as.factor(EnvironmentSatisfaction),
+    JobInvolvement = as.factor(JobInvolvement),
+    JobLevel = as.factor(JobLevel),
+    JobSatisfaction = as.factor(JobSatisfaction),
+    RelationshipSatisfaction = as.factor(RelationshipSatisfaction),
+    WorkLifeBalance = as.factor(WorkLifeBalance),
+    # Convert numeric variables to appropriate data types
+    Age = as.integer(Age),
+    DailyRate = as.integer(DailyRate),
+    DistanceFromHome = as.integer(DistanceFromHome),
+    EmployeeCount = as.integer(EmployeeCount),
+    EmployeeNumber = as.integer(EmployeeNumber),
+    HourlyRate = as.integer(HourlyRate),
+    MonthlyIncome = as.integer(MonthlyIncome),
+    MonthlyRate = as.integer(MonthlyRate),
+    NumCompaniesWorked = as.integer(NumCompaniesWorked),
+    PercentSalaryHike = as.integer(PercentSalaryHike),
+    StandardHours = as.integer(StandardHours),
+    StockOptionLevel = as.integer(StockOptionLevel),
+    TotalWorkingYears = as.integer(TotalWorkingYears),
+    TrainingTimesLastYear = as.integer(TrainingTimesLastYear),
+    YearsAtCompany = as.integer(YearsAtCompany),
+    YearsInCurrentRole = as.integer(YearsInCurrentRole),
+    YearsSinceLastPromotion = as.integer(YearsSinceLastPromotion),
+    YearsWithCurrManager = as.integer(YearsWithCurrManager)
+  )
+# Verify data type formatting using str
+str(employee)
+
+
+####################################Outlier detection
+# Function to detect outliers using IQR method
+detect_outliers <- function(x) {
+  Q1 <- quantile(x, 0.25)
+  Q3 <- quantile(x, 0.75)
+  IQR <- Q3 - Q1
+  lower_bound <- Q1 - 1.5 * IQR
+  upper_bound <- Q3 + 1.5 * IQR
+  outliers <- x[x < lower_bound | x > upper_bound]
+  return(outliers)
+}
+# Identify numerical columns
+numerical_columns <- select(employee, where(is.numeric))
+# Apply the function to detect outliers in each numeric column
+outliers_list <- lapply(numerical_columns, detect_outliers)
+
+# Count outliers in each column
+outliers_count <- sapply(outliers_list, length)
+
+# Tabulated list of outliers
+outliers_table <- lapply(outliers_list, function(x) {
+  if (length(x) > 0) {
+    return(table(x))
+  } else {
+    return(NULL)
+  }
+})
+
+# Print count of outliers in each column
+print(outliers_count)
+
+# Print tabulated list of outliers
+print(outliers_table)
+  
+
+
+## ii. Data Visualization (using chart, box plot, quartiles, etc.) : 10 Marks
+########visualization
+# scatter plot for monthly income vs total working years
+scatter_plot <- ggplot(employee, aes(x = TotalWorkingYears, y = MonthlyIncome)) +
+  geom_point(alpha = 0.6) +  # Add transparency to points
+  labs(title = "Monthly Income vs Total Working Years",
+       x = "Total Working Years",
+       y = "Monthly Income") +
+  theme_minimal()
+
+# Display the scatter plot
+print(scatter_plot)
+
+##job level distribution
+# bar plot for job level
+job_level_plot <- ggplot(employee, aes(x = JobLevel)) +
+  geom_bar(fill = "skyblue", color = "black") +
+  labs(title = "Distribution of Job Levels",
+       x = "Job Level",
+       y = "Frequency") +
+  theme_minimal()
+
+# Display the bar plot
+print(job_level_plot)
+
+#  grouped box plot for years at company vs. attrition 
+years_at_company_boxplot <- ggplot(employee, aes(x = Attrition, y = YearsAtCompany, fill = Attrition)) +
+  geom_boxplot() +
+  labs(title = "Years at Company vs. Attrition",
+       x = "Attrition",
+       y = "Years at Company") +
+  theme_minimal() +
+  scale_fill_manual(values = c("skyblue", "orange")) +  # Custom colors for attrition categories
+  scale_y_continuous(breaks = seq(0, max(employee$YearsAtCompany), by = 2))  # Modify y-axis scale
+# Display the modified grouped box plot
+print(years_at_company_boxplot)
+
+##identifying reason of attribution
+# Filter the dataset for employees with attrition status "Yes"
+attrition_yes <- employee[employee$Attrition == "Yes", ]
+
+# Create a scatter plot for years in current role vs. salary for employees with attrition status "Yes"
+scatter_plot_attrition_yes <- ggplot(attrition_yes, aes(x = YearsInCurrentRole, y = MonthlyIncome)) +
+  geom_point(color = "red") +
+  labs(title = "Years in Current Role vs. Salary for Employees with Attrition Status 'Yes'",
+       x = "Years in Current Role",
+       y = "Monthly Income") +
+  theme_minimal()
+
+# Display the scatter plot
+print(scatter_plot_attrition_yes)
+
+##quartiles
+# Create a box plot for years in current role by quartiles
+boxplot_years_in_current_role <- ggplot(employee, aes(y = YearsInCurrentRole)) +
+  geom_boxplot(fill = "skyblue", color = "black") +
+  labs(title = "Box Plot of Years in Current Role by Quartiles",
+       y = "Years in Current Role") +
+  theme_minimal()
+
+# Display the box plot
+print(boxplot_years_in_current_role)
+
+##
+# grouped bar plot for multiple variables
+grouped_bar_plot <- ggplot(employee, aes(x = JobInvolvement)) +
+  geom_bar(aes(fill = factor(YearsSinceLastPromotion)), position = "dodge", width = 0.7) +
+  facet_wrap(~ PerformanceRating + JobSatisfaction, scales = "free") +
+  labs(title = "Job Involvement, Years Since Last Promotion, Job Satisfaction, and Performance Rating",
+       x = "Job Involvement",
+       y = "Count") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels for better readability
+
+# Display the grouped bar plot
+print(grouped_bar_plot)
+
+
+##############feature extraction using correlation matrix
+# Calculate correlation matrix
+correlation_matrix <- cor(numerical_columns)
+# Remove columns with zero or near-zero variance
+numerical_columns <- numerical_columns %>% select(-where(~ (var(.) == 0)))
+# Melt correlation matrix for visualization
+melted_correlation <- as.data.frame(as.table(correlation_matrix))
+names(melted_correlation) <- c("variable1", "variable2", "correlation")
+
+# Create heatmap with correlation values
+heatmap_plot <- ggplot(melted_correlation, aes(variable1, variable2, fill = correlation)) +
+  geom_tile(color = "white", size = 0.5) +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0, limit = c(-1, 1), space = "Lab",
+                       name="Correlation",
+                       breaks=seq(-1, 1, by=0.2)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, size = 5, hjust = 1),
+        axis.text.y = element_text(size = 5)) +
+  geom_text(aes(label = round(correlation, 2)), color = "black", size = 2) + 
+  coord_fixed() +
+  labs(title = "Correlation Heatmap",
+       x = "Features",
+       y = "Features")
+
+# Display the modified heatmap
+print(heatmap_plot)
+
+###or correlation matrix extraction
+#correlation
+# Convert non-numeric columns to numeric if possible
+employee_numeric <- employee[, sapply(employee, is.numeric)]
+# Identify columns with zero standard deviation
+zero_std_dev_columns <- names(employee_numeric)[apply(employee_numeric, 2, sd) == 0]
+# Print the columns with zero standard deviation
+print(zero_std_dev_columns)
+# Remove columns with zero standard deviation
+employee_numeric <- employee_numeric[, !colnames(employee_numeric) %in% zero_std_dev_columns]
+# Calculate correlation matrix
+correlation_matrix <- cor(employee_numeric)
+# Remove columns with zero or near-zero variance
+employee_numeric <- employee_numeric %>% select(-where(~ (var(.) == 0)))
+# Melt correlation matrix for visualization
+melted_correlation <- as.data.frame(as.table(correlation_matrix))
+names(melted_correlation) <- c("variable1", "variable2", "correlation")
+# Create heatmap with correlation values
+heatmap_plot <- ggplot(melted_correlation, aes(variable1, variable2, fill = correlation)) +
+  geom_tile(color = "white", size = 0.5) +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0, limit = c(-1, 1), space = "Lab",
+                       name="Correlation",
+                       breaks=seq(-1, 1, by=0.2)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, size = 5, hjust = 1),
+        axis.text.y = element_text(size = 5)) +
+  geom_text(aes(label = round(correlation, 2)), color = "black", size = 2) + 
+  coord_fixed() +
+  labs(title = "Correlation Heatmap",
+       x = "Features",
+       y = "Features")
+
+# Display the heatmap
+print(heatmap_plot)
+
+# Find highly correlated feature pairs
+highly_correlated_pairs <- findCorrelation(correlation_matrix, cutoff = 0.8)
+
+# Get the names of highly correlated features
+highly_correlated_features <- names(employee_numeric)[highly_correlated_pairs]
+
+str(highly_correlated_pairs)
+# Set the cutoff threshold for feature selection
+cutoff_threshold <- 0.2
+
+# Initialize an empty vector to store selected features
+selected_features <- character()
+
+# Loop through the correlation matrix to identify highly correlated pairs
+for (i in 1:(ncol(correlation_matrix) - 1)) {
+  for (j in (i + 1):ncol(correlation_matrix)) {
+    # Check if the absolute correlation coefficient is above the threshold
+    if (abs(correlation_matrix[i, j]) > cutoff_threshold) {
+      # Select both features from the pair
+      selected_features <- c(selected_features, colnames(correlation_matrix)[i])
+      selected_features <- c(selected_features, colnames(correlation_matrix)[j])
+    }
+  }
+}
+
+# Remove duplicate feature names
+selected_features <- unique(selected_features)
+
+# Print the final selected features
+print("Final Selected Features:")
+print(selected_features)
+
+
+# Create the final selected dataset
+employee_selected_features <- employee[, selected_features]
+
+# Display the final selected dataset
+head(employee_selected_features)
+
+# Create heatmap for the final selected features
+correlation_matrix_selected <- cor(employee_selected_features)
+# Filter the melted correlation matrix to include only selected features
+melted_correlation_selected <- melted_correlation %>%
+  filter(variable1 %in% selected_features | variable2 %in% selected_features)
+
+# Create the heatmap plot for selected features
+heatmap_plot_selected <- ggplot(melted_correlation_selected, aes(variable1, variable2, fill = correlation)) +
+  geom_tile(color = "white", size = 0.5) +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0, limit = c(-1, 1), space = "Lab",
+                       name = "Correlation",
+                       breaks = seq(-1, 1, by = 0.2)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, size = 5, hjust = 1),
+        axis.text.y = element_text(size = 5)) +
+  geom_text(aes(label = round(correlation, 2)), color = "black", size = 2) + 
+  coord_fixed() +
+  labs(title = "Correlation Heatmap for Selected Features",
+       x = "Features",
+       y = "Features")
+
+# Display the heatmap plot for selected features
+print(heatmap_plot_selected)
+
+
+# Get the rejected features by finding the set difference between all features and selected features
+rejected_features <- setdiff(unique(melted_correlation$variable1), selected_features)
+
+# Adding a column to indicate selected or rejected features
+melted_correlation <- melted_correlation %>%
+  mutate(selection = ifelse(variable1 %in% selected_features & variable2 %in% selected_features, "selected",
+                            ifelse(variable1 %in% rejected_features & variable2 %in% rejected_features, "rejected", "other")))
+
+# Create the heatmap plot with color highlighting for selected and rejected features
+heatmap_plot_selected <- ggplot(melted_correlation, aes(variable1, variable2, fill = selection)) +
+  geom_tile(color = "white", size = 0.5) +
+  scale_fill_manual(values = c("selected" = "red", "rejected" = "blue", "other" = "white"), name = "Selection",
+                    labels = c("Selected", "Rejected", "Other")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, size = 5, hjust = 1),
+        axis.text.y = element_text(size = 5)) +
+  labs(title = "Correlation Heatmap with Feature Selection",
+       x = "Features",
+       y = "Features")
+
+# Display the heatmap plot
+print(heatmap_plot_selected)
+
+#renaming to employee_s
+employee_s <- employee_selected_features
+
+
+## Clustering,classification, prediction
+#########classification by predicting the promotion potential using decision tree
+# Define a threshold for years since last promotion
+promotion_threshold <- 2  # Employees promoted within the last 2 years are considered as promoted
+# Create a new binary target variable 'Promoted'
+employee$Promoted <- ifelse(employee$YearsSinceLastPromotion <= promotion_threshold, "Yes", "No")
+# Define features and the new target variable
+features <- c("PerformanceRating", "YearsSinceLastPromotion", "JobLevel","JobInvolvement")  # Add other relevant features
+target <- "Promoted"
+# Create a formula
+formula <- as.formula(paste(target, "~", paste(features, collapse = "+")))
+# Create training and testing datasets
+set.seed(123)  # For reproducibility
+train_indices <- sample(nrow(employee), 0.7 * nrow(employee))  # 70% for training
+train_data <- employee[train_indices, ]
+test_data <- employee[-train_indices, ]
+# Train the decision tree model
+decision_tree_model <- rpart(formula, data = train_data, method = "class")
+# Visualize the decision tree
+rpart.plot(decision_tree_model, box.palette = "RdBu", type = 4, extra = 102, tweak = 1.3)
+# Make predictions on the test data
+predictions <- predict(decision_tree_model, test_data, type = "class")
+# Evaluate the model
+confusion_matrix <- table(predictions, test_data$Promoted)
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+print(confusion_matrix)
+print(paste("Accuracy:", accuracy))
+
+
+
+######adding the required features
+
+# Extract PerformanceRating and JobSatisfaction columns from the original employee dataset
+performance_job_satisfaction <- employee[, c("PerformanceRating", "JobSatisfaction","WorkLifeBalance")]
+
+# Combine selected_features with PerformanceRating and JobSatisfaction
+selected_features_with_performance_job_satisfaction <- c(selected_features, "PerformanceRating", "JobSatisfaction","WorkLifeBalance")
+
+# Create the employee_s dataset with the combined features
+employee_s <- employee[, selected_features_with_performance_job_satisfaction]
+View(employee_s)
+
+#######classifying work-life balance
+# Remove observations with missing values in the 'WorkLifeBalance' column
+employee_s <- na.omit(employee_s)
+# Define a function to categorize Work-Life Balance based on WorkLifeBalance score
+categorize_work_life_balance <- function(score) {
+  if (score > 3) {
+    return("Balanced")
+  } else if (score >= 2 && score <=3 ) {
+    return("Imbalanced")
+  } else {
+    return("Unsatisfactory")
+  }
+}
+# Convert 'WorkLifeBalance' column to numeric
+employee_s$WorkLifeBalance <- as.numeric(as.character(employee_s$WorkLifeBalance))
+# Create the Work-Life Balance category variable
+employee_s$WorkLifeBalanceCategory <- sapply(employee_s$WorkLifeBalance, categorize_work_life_balance)
+# Define features and target variable
+features <- c("WorkLifeBalance", "JobSatisfaction")
+target <- "WorkLifeBalanceCategory"
+# Create a formula
+formula <- as.formula(paste(target, "~", paste(features, collapse = "+")))
+# Create training and testing datasets
+set.seed(123)  # For reproducibility
+train_indices <- sample(nrow(employee_s), 0.7 * nrow(employee_s))  # 70% for training
+train_data <- employee_s[train_indices, ]
+test_data <- employee_s[-train_indices, ]
+# Convert 'WorkLifeBalanceCategory' to factor
+train_data$WorkLifeBalanceCategory <- as.factor(train_data$WorkLifeBalanceCategory)
+# Train the Random Forest model
+random_forest_model <- randomForest(formula, data = train_data)
+# Make predictions on the test data
+predictions <- predict(random_forest_model, test_data)
+#visualize the predictions
+# Create a pie chart for Work-Life Balance categories
+ggplot(train_data, aes(x = "", fill = WorkLifeBalanceCategory)) +
+  geom_bar(width = 1) +
+  coord_polar("y") +
+  labs(title = "Distribution of Work-Life Balance Categories",
+       fill = "Work-Life Balance Category") +
+  theme_void()
+# Evaluate the model
+confusion_matrix <- table(predictions, test_data$WorkLifeBalanceCategory)
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+print(confusion_matrix)
+print(paste("Accuracy:", accuracy))
+
+
+######prediction
+# Assuming 'Attrition' is the target variable
+# Define features and target variable
+features <- c("Age", "BusinessTravel", "Department", "DistanceFromHome", "Education", "EducationField", 
+              "EnvironmentSatisfaction", "Gender", "JobInvolvement", "JobLevel", "JobRole", 
+              "JobSatisfaction", "MaritalStatus", "MonthlyIncome", "NumCompaniesWorked", 
+              "OverTime", "PerformanceRating", "RelationshipSatisfaction", "StockOptionLevel", 
+              "TotalWorkingYears", "TrainingTimesLastYear", "WorkLifeBalance", "YearsAtCompany", 
+              "YearsInCurrentRole", "YearsSinceLastPromotion", "YearsWithCurrManager")
+target <- "Attrition"
+# Convert 'Attrition' feature to binary
+employee$Attrition <- ifelse(employee$Attrition == "Yes", 1, 0)
+
+# Create formula
+formula <- as.formula(paste(target, "~", paste(features, collapse = "+")))
+# Split data into training and testing sets
+set.seed(123)
+train_indices <- sample(nrow(employee), 0.7 * nrow(employee))
+train_data <- employee[train_indices, ]
+test_data <- employee[-train_indices, ]
+# Train the logistic regression model
+logit_model <- glm(formula, data = train_data, family = binomial)
+# Make predictions on test data
+predictions <- predict(logit_model, newdata = test_data, type = "response")
+# Convert probabilities to binary predictions
+binary_predictions <- ifelse(predictions > 0.5, "Yes", "No")
+# Convert binary predictions to original format
+prediction_df$Attrition <- ifelse(prediction_df$Attrition == 1, "Yes", "No")
+
+# Plot histogram of predicted probabilities
+ggplot(prediction_df, aes(x = Predicted_Probability, fill = Attrition)) +
+  geom_histogram(binwidth = 0.05, position = "identity", alpha = 0.7) +
+  labs(title = "Distribution of Predicted Probabilities for Attrition",
+       x = "Predicted Probability",
+       y = "Frequency",
+       fill = "Attrition") +
+  scale_fill_manual(values = c("Yes" = "red", "No" = "blue")) +
+  theme_minimal()
+
+# Evaluate the model
+confusion_matrix <- table(binary_predictions, test_data$Attrition)
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+print(confusion_matrix)
+print(paste("Accuracy:", accuracy))
+
+################clustering on performance kmeans
+performance_features <- employee_s[, c("PerformanceRating", "JobSatisfaction")]
+str(performance_features)
+
+# Convert factor variables to numeric
+performance_features$PerformanceRating <- as.numeric(as.character(performance_features$PerformanceRating))
+performance_features$JobSatisfaction <- as.numeric(as.character(performance_features$JobSatisfaction))
+
+# Standardize numeric variables
+scaled_performance <- scale(performance_features)
+
+# Perform K-means clustering
+k <- 4 # Number of clusters 
+set.seed(123)
+kmeans_result <- kmeans(scaled_performance, centers = k)
+
+# Add cluster labels to the dataset
+performance_features$Cluster <- as.factor(kmeans_result$cluster)
+
+# Visualize the clusters
+ggplot(performance_features, aes(x = PerformanceRating, y = JobSatisfaction, color = Cluster)) +
+  geom_point(size = 3) +
+  labs(title = "Performance Grouping by Performance Rating and Job Satisfaction",
+       x = "Performance Rating",
+       y = "Job Satisfaction") +
+  theme_minimal()
+###dbscan clustering
+
+
+features <- employee[, c("Age", "MonthlyIncome")]
+
+# Normalize the features if needed
+features <- scale(features)
+
+# Set the DBSCAN parameters (epsilon and minPts)
+epsilon <- 0.5  
+minPts <- 5     
+
+# Perform DBSCAN clustering
+dbscan_result <- dbscan(features, eps = epsilon, MinPts = minPts)
+
+plot(dbscan_result, features, 
+     main = "DBSCAN Clustering", xlab = "Age", ylab = "Monthly Income")
+
+# Check the dimensions of features and dbscan_result
+dim(features)
+length(dbscan_result$cluster)
+features
+# Ensure that they have the same number of rows
+# Plotting the DBSCAN clustering result
+plot(dbscan_result, features,
+     main = "DBSCAN Clustering",
+     xlab = "Age", ylab = "Monthly Income")
+
+
+```
+
